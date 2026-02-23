@@ -1,19 +1,19 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { useState } from "react";
 import { Button, TextInput } from "react-native";
-import { auth } from "../../firebaseConfig";
+import { auth } from "../firebaseConfig";
 
-export default function SignupScreen() {
+export default function LoginScreen() {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [errorMessage, setErrorMessage] = useState("")
     const [successMessage, setSuccessMessage] = useState("")
 
-    function signup() {
+    function login() {
         setErrorMessage("")
-        createUserWithEmailAndPassword(auth, email, password)
+        signInWithEmailAndPassword(auth, email, password)
             .then((userCredential) => {
                 // Signed in 
                 const user = userCredential.user;
@@ -81,8 +81,8 @@ export default function SignupScreen() {
                     height: 40,
                 }}>
                     <Button
-                    title="signup"
-                    onPress={signup}
+                    title="Login"
+                    onPress={login}
                     />
                 </ThemedView>
             </ThemedView>
