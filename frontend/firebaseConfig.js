@@ -1,7 +1,8 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp } from '@firebase/app';
 
 // Optionally import the services that you want to use
-import { getAuth } from 'firebase/auth';
+import { getAuth } from '@firebase/auth';
+import { getFirestore } from '@firebase/firestore';
 // import {...} from 'firebase/database';
 // import {...} from 'firebase/firestore';
 // import {...} from 'firebase/functions';
@@ -22,3 +23,5 @@ const app = initializeApp(firebaseConfig);
 // see the Firebase documentation: https://firebase.google.com/docs/web/setup#access-firebase
 
 export const auth = getAuth(app)
+export const db = getFirestore(app)
+export const backend = "http://localhost:8000"

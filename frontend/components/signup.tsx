@@ -3,7 +3,7 @@ import { ThemedView } from "@/components/themed-view";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { useState } from "react";
 import { Button, TextInput } from "react-native";
-import { auth } from "../firebaseConfig";
+import { auth, backend } from "../firebaseConfig";
 
 export default function SignupScreen() {
     const [email, setEmail] = useState("")
@@ -11,13 +11,28 @@ export default function SignupScreen() {
     const [errorMessage, setErrorMessage] = useState("")
     const [successMessage, setSuccessMessage] = useState("")
 
-    function signup() {
+    async function signup() {
         setErrorMessage("")
         createUserWithEmailAndPassword(auth, email, password)
-            .then((userCredential) => {
+            .then(async (userCredential) => {
                 // Signed in 
                 const user = userCredential.user;
+                const token = await user.getIdToken(true)
+                // TODO: make a call to the backend to create a default user profile
                 setSuccessMessage("Successfully logged in")
+                fetch(`${backend}/create-profile`, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        firstName: "Jaime",
+                        lastName: "Doe",
+                        authToken: token
+                    }),
+                    headers: {
+                        "Content-type": "application/json"
+                    }
+                })
+                    .then((response) => console.log(response))
+                    .catch((error) => console.log(error))
             })
             .catch((error) => {
                 const errorCode = error.code;

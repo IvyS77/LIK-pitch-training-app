@@ -1,20 +1,36 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 import os
 
 load_dotenv()
 cred = credentials.Certificate(os.environ["PATH_TO_FIREBASE_ADMIN_KEY"])
 firebase_admin.initialize_app(cred, {'databaseURL': 'https://ear-training-8f082.firebaseio.com'})
 db = firestore.client()
-doc = db.collection("users").document("pU1z2BwT9l0hO1p6R34a").get()
+# doc = db.collection("users").document("pU1z2BwT9l0hO1p6R34a").get()
 
-if (doc.exists): # type: ignore
-    print(doc.to_dict()) # type: ignore
+# if (doc.exists): # type: ignore
+#     print(doc.to_dict()) # type: ignore
+
+class CreateProfileRequestBody(BaseModel):
+    firstName: str 
+    lastName: str
+    authToken: str
 
 app = FastAPI()
-
+origins = [
+    "http://localhost:8081"
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,    
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():
@@ -24,3 +40,21 @@ def read_root():
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: str | None = None):
     return {"item_id": item_id, "q": q}
+
+@app.post("/create-profile")
+async def create_profile(profile: CreateProfileRequestBody):
+    # TODO: validate auth_token here
+    decoded_token = auth.verify_id_token(profile.authToken)
+    email = decoded_token["email"]
+    uid = decoded_token["uid"]
+    db.collection("users").document(uid).set({
+        "firstName": profile.firstName,
+        "lastName": profile.lastName,
+        "email": email,
+        "uid": uid,
+        "level": 1,
+        "currentXp": 0,
+        "streak": 0
+    })
+
+    return "success"

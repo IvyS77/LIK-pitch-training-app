@@ -3,10 +3,10 @@ import SignupScreen from "@/components/signup";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useAuth } from "@/hooks/use-auth";
-import { TextInput } from "react-native";
+import { Button, TextInput } from "react-native";
 
 export default function Profile() {
-    const user = useAuth()
+    const [user, profile] = useAuth()
 
     if (user === null) {
         return (
@@ -45,6 +45,47 @@ export default function Profile() {
     }
     
     return (
-        <ThemedView>{user?.uid}</ThemedView>
+        <ThemedView style={{
+            width: "100%",
+            alignItems: "center"
+        }}>
+            <ThemedView
+            style={{
+                flexDirection: "row",
+                width: "100%",
+                gap: 8,
+                padding: 8,
+                maxWidth: 600
+            }}
+            >
+                <ThemedView style={{
+                    flexGrow: 1
+                }}>
+                    <ThemedText>First Name</ThemedText>
+                    <TextInput 
+                    style={{
+                        borderWidth: 1,
+                        height: 40,
+                        paddingHorizontal: 8,
+                    }}
+                    value={profile?.firstName}
+                    />
+                </ThemedView>
+                <ThemedView style={{
+                    flexGrow: 1
+                }}>
+                    <ThemedText>Last Name</ThemedText>
+                    <TextInput 
+                    style={{
+                        borderWidth: 1,
+                        height: 40,
+                        paddingHorizontal: 8
+                    }}/>
+                </ThemedView>
+            </ThemedView>
+            
+            <Button title="Update"/>
+
+        </ThemedView>
     )
 }
