@@ -19,7 +19,7 @@ import {
   createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@/firebaseConfig";
+import { auth, db, uploadFile, uploadImage } from "@/firebaseConfig";
 import { useAuth } from "@/hooks/useAuth";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image, Linking } from "react-native";
@@ -156,6 +156,7 @@ export default function ProfileScreen() {
       if (!uri) return;
 
       setAvatarUri(uri);
+      uploadImage(uri)
     } catch (e: any) {
       console.log("pickAvatar error:", e?.message ?? e);
       Alert.alert("Error", e?.message ?? "Failed to open photo library.");

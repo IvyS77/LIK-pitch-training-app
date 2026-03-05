@@ -76,9 +76,14 @@ async def create_profile(profile: CreateProfileRequestBody):
         "lastName": profile.lastName,
         "email": email,
         "uid": uid,
+        "profile_picture": "",
         "level": 1,
         "currentXp": 0,
         "streak": 0
     })
 
     return "success"
+
+@app.post("/update-profile")
+async def update_profile():
+    return
