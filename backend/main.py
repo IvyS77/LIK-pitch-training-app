@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 import os
 
 load_dotenv()
@@ -15,9 +17,27 @@ if not firebase_admin._apps:
     )
 
 db = firestore.client()
+# doc = db.collection("users").document("pU1z2BwT9l0hO1p6R34a").get()
+
+# if (doc.exists): # type: ignore
+#     print(doc.to_dict()) # type: ignore
+
+class CreateProfileRequestBody(BaseModel):
+    firstName: str 
+    lastName: str
+    authToken: str
 
 app = FastAPI()
-
+origins = [
+    "http://localhost:8081"
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,    
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():
@@ -44,3 +64,26 @@ def get_user():
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: str | None = None):
     return {"item_id": item_id, "q": q}
+
+@app.post("/create-profile")
+async def create_profile(profile: CreateProfileRequestBody):
+    # TODO: validate auth_token here
+    decoded_token = auth.verify_id_token(profile.authToken)
+    email = decoded_token["email"]
+    uid = decoded_token["uid"]
+    db.collection("users").document(uid).set({
+        "firstName": profile.firstName,
+        "lastName": profile.lastName,
+        "email": email,
+        "uid": uid,
+        "profile_picture": "",
+        "level": 1,
+        "currentXp": 0,
+        "streak": 0
+    })
+
+    return "success"
+
+@app.post("/update-profile")
+async def update_profile():
+    return

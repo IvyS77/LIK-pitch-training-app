@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getStorage, ref, uploadBytes } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB1jOfSnwiSLdQLcs63vFzt7NJi58i0p3Q",
@@ -20,3 +20,23 @@ export const storage = getStorage(app);
 
 // if we use backend API
 export const backend = "http://localhost:8000";
+
+/**
+ * Uploads an image to Firebase Storage
+ * I think there is the possibility of 
+ * @param url url of the image to upload
+ */
+export async function uploadImage(url: string) {
+  const image = await fetch(url)
+  const imageAsBlob = await image.blob()
+  const storage = getStorage()
+  const uniqueFilePath = crypto.randomUUID() + Date.now().toString();
+  const storageRef = ref(storage, uniqueFilePath)
+
+  const snapshot = await uploadBytes(storageRef, imageAsBlob)
+  const path = snapshot.ref.fullPath
+  console.log(path)
+  console.log('Uploaded a blob or file!');
+  
+  return path
+}
