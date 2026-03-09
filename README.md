@@ -29,11 +29,3 @@
 | **Backend** | Firebase (Auth, Firestore, Storage) |
 | **Styling** | React Native StyleSheet with Dynamic Theming |
 | **UI Components** | Expo Router, Lucide/Ionicons |
-
----
-
-## 🏗️ Architecture & Debugging
-This project showcases advanced solutions for common React Native hurdles:
-* **Native Audio Bypass**: Implemented `expo-av` audio modes to ensure playback during iOS silent mode.
-* **Blob Handling**: Solved `Network request failed` errors by refactoring standard `fetch` into manual `XMLHttpRequest` for local file-to-blob conversion.
-* **State Persistence**: Custom Hooks (`use-auth`) for managing Firebase authentication states.
