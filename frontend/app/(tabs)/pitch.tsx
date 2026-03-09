@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native';
+import { View, Text, Pressable, StyleSheet, LayoutAnimation, useColorScheme } from 'react-native';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { Ionicons } from '@expo/vector-icons'; 
 import * as Tone from "tone";
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 
-// --- 🎹 GLOBAL AUDIO SINGLETON (Prevents AudioParam Errors) ---
 let globalSynth: Tone.Synth | null = null;
 
 const NOTE_OPTIONS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
@@ -17,6 +17,17 @@ const DIFFICULTY_SECONDS: Record<Difficulty, number> = {
 };
 
 export default function PitchScreen() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const theme = {
+    bg: isDark ? "#020617" : "#F8FAFC",
+    card: isDark ? "#0F172A" : "#FFFFFF",
+    text: isDark ? "#F8FAFC" : "#0F172A",
+    subText: isDark ? "#64748B" : "#94A3B8",
+    border: isDark ? "#1E293B" : "#E2E8F0"
+  };
+
   const [targetNote, setTargetNote] = useState<string>("");
   const [selectedNote, setSelectedNote] = useState<string | null>(null);
   const [state, setState] = useState<'idle' | 'answering' | 'result'>('idle');
@@ -26,20 +37,28 @@ export default function PitchScreen() {
   const initAndPlay = async (note: string) => {
     if (!note) return;
     try {
+      // Force audio playback even on iOS silent mode
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+      });
+      
       await Tone.start();
+      
       if (!globalSynth) {
         globalSynth = new Tone.Synth({
           oscillator: { type: "triangle" },
           envelope: { attack: 0.1, release: 1 }
         }).toDestination();
       }
+      
       if (Tone.getContext().state !== 'running') {
         await Tone.getContext().resume();
       }
+      
       const now = Tone.now();
       globalSynth.triggerAttackRelease(`${note}4`, "4n", now + 0.1);
     } catch (e) {
-      console.warn("Audio initialized via singleton.");
+      console.warn("Audio Context Error:", e);
     }
   };
 
@@ -58,14 +77,11 @@ export default function PitchScreen() {
 
   const handleSubmit = () => {
     const isCorrect = selectedNote === targetNote;
-    
-    // --- 🎯 FEEDBACK LOGIC ---
     if (isCorrect) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
-
     LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
     setState('result');
   };
@@ -81,17 +97,18 @@ export default function PitchScreen() {
   }, [state, secondsLeft]);
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { backgroundColor: theme.bg }]}>
       <View style={styles.header}>
-        <ThemedText type="title" style={styles.titleText}>Pitch Training</ThemedText>
+        <ThemedText type="title" style={[styles.titleText, { color: theme.text }]}>Pitch Training</ThemedText>
       </View>
 
-      {/* 🎧 SLEEK AUDIO HUB */}
+      {/* 🎧 AUDIO HUB */}
       <Pressable 
         onPress={() => state === 'answering' && initAndPlay(targetNote)}
         disabled={state !== 'answering'}
         style={({ pressed }) => [
           styles.playHub,
+          { backgroundColor: theme.card, borderColor: theme.border },
           pressed && { opacity: 0.6 }
         ]}
       >
@@ -100,18 +117,16 @@ export default function PitchScreen() {
             <Ionicons name={state === 'answering' ? "headset" : "play"} size={14} color="white" />
           </View>
           <View>
-            <Text style={styles.hubTitle}>Identify the Pitch</Text>
-            <Text style={styles.hubStatus}>{state === 'answering' ? "Listening..." : "Ready"}</Text>
+            <Text style={[styles.hubTitle, { color: theme.text }]}>Identify the Pitch</Text>
+            <Text style={[styles.hubStatus, { color: theme.subText }]}>{state === 'answering' ? "Listening..." : "Ready"}</Text>
           </View>
         </View>
-        {state === 'answering' && (
-          <Ionicons name="volume-high" size={16} color="#1DB954" />
-        )}
+        {state === 'answering' && <Ionicons name="volume-high" size={16} color="#1DB954" />}
       </Pressable>
 
-      <View style={styles.gameCard}>
+      <View style={[styles.gameCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <View style={styles.cardInfo}>
-          <View style={styles.difficultyGroup}>
+          <View style={[styles.difficultyGroup, { backgroundColor: theme.bg }]}>
             {(['Easy', 'Medium', 'Hard'] as Difficulty[]).map((d) => (
               <Pressable
                 key={d}
@@ -122,7 +137,7 @@ export default function PitchScreen() {
                 }}
                 style={[styles.diffTab, difficulty === d && styles.diffTabActive]}
               >
-                <Text style={[styles.diffTabText, difficulty === d && { color: '#fff' }]}>{d}</Text>
+                <Text style={[styles.diffTabText, difficulty === d ? { color: '#fff' } : { color: theme.subText }]}>{d}</Text>
               </Pressable>
             ))}
           </View>
@@ -142,10 +157,11 @@ export default function PitchScreen() {
               }}
               style={[
                 styles.noteBtn,
+                { borderColor: theme.border },
                 selectedNote === note && styles.noteBtnActive
               ]}
             >
-              <Text style={[styles.noteText, { color: selectedNote === note ? '#fff' : '#94A3B8' }]}>
+              <Text style={[styles.noteText, { color: selectedNote === note ? '#fff' : theme.subText }]}>
                 {note}
               </Text>
             </Pressable>
@@ -165,19 +181,19 @@ export default function PitchScreen() {
         </Pressable>
       </View>
 
-      {/* FLOATING RESULT BADGE */}
+      {/* RESULT BADGE */}
       {state === 'result' && (
         <View style={[
           styles.toast, 
-          { borderColor: selectedNote === targetNote ? "#1DB954" : "#EF4444" }
+          { backgroundColor: theme.card, borderColor: selectedNote === targetNote ? "#1DB954" : "#EF4444" }
         ]}>
           <Ionicons 
             name={selectedNote === targetNote ? "checkmark-circle" : "close-circle"} 
             size={18} 
             color={selectedNote === targetNote ? "#1DB954" : "#EF4444"} 
           />
-          <Text style={styles.toastText}>
-            {selectedNote === targetNote ? " PERFECT! YOU GOT IT." : ` WRONG, IT WAS ${targetNote}`}
+          <Text style={[styles.toastText, { color: theme.text }]}>
+            {selectedNote === targetNote ? " PERFECT!" : ` WRONG, WAS ${targetNote}`}
           </Text>
         </View>
       )}
@@ -186,42 +202,28 @@ export default function PitchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 60, backgroundColor: "#020617" },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 60 },
   header: { marginBottom: 15 },
-  titleText: { color: "#F8FAFC", fontSize: 24, fontWeight: '900', letterSpacing: -1 },
-  
-  playHub: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
-    padding: 14, borderRadius: 16, backgroundColor: "#0F172A", 
-    borderWidth: 1, borderColor: "#1E293B", marginBottom: 20
-  },
+  titleText: { fontSize: 24, fontWeight: '900', letterSpacing: -1 },
+  playHub: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 16, borderWidth: 1, marginBottom: 20 },
   hubLeft: { flexDirection: 'row', alignItems: 'center' },
   statusIcon: { width: 30, height: 30, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  hubTitle: { fontSize: 14, fontWeight: '700', color: "#F1F5F9" },
-  hubStatus: { fontSize: 10, color: '#64748B', textTransform: 'uppercase' },
-
-  gameCard: { padding: 20, borderRadius: 24, backgroundColor: "#0F172A", borderStyle: 'dashed', borderWidth: 1, borderColor: "#334155" },
+  hubTitle: { fontSize: 14, fontWeight: '700' },
+  hubStatus: { fontSize: 10, textTransform: 'uppercase' },
+  gameCard: { padding: 20, borderRadius: 24, borderStyle: 'dashed', borderWidth: 1 },
   cardInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 25 },
-  difficultyGroup: { flexDirection: 'row', backgroundColor: '#020617', padding: 4, borderRadius: 10 },
+  difficultyGroup: { flexDirection: 'row', padding: 4, borderRadius: 10 },
   diffTab: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 7 },
   diffTabActive: { backgroundColor: "#1DB954" },
-  diffTabText: { fontSize: 11, fontWeight: '800', color: '#475569' },
+  diffTabText: { fontSize: 11, fontWeight: '800' },
   timerDisplay: { fontSize: 18, fontWeight: '900', color: "#1DB954" },
-  
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
-  noteBtn: { width: 54, height: 54, borderRadius: 16, borderWidth: 1, borderColor: "#1E293B", justifyContent: 'center', alignItems: 'center', margin: 8 },
+  noteBtn: { width: 54, height: 54, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center', margin: 8 },
   noteBtnActive: { backgroundColor: "#1DB954", borderColor: "#1DB954" },
   noteText: { fontSize: 18, fontWeight: '800' },
-  
   footer: { marginTop: 'auto', marginBottom: 40 },
   actionBtn: { backgroundColor: '#1DB954', paddingVertical: 18, borderRadius: 18, alignItems: 'center' },
   actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
-  
-  toast: { 
-    position: 'absolute', bottom: 120, alignSelf: 'center', 
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: "#F8FAFC", paddingVertical: 12, paddingHorizontal: 20, 
-    borderRadius: 50, borderWidth: 2, shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 10
-  },
-  toastText: { color: '#020617', fontWeight: '900', fontSize: 13, marginLeft: 8 }
+  toast: { position: 'absolute', bottom: 120, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 50, borderWidth: 2, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10 },
+  toastText: { fontWeight: '900', fontSize: 13, marginLeft: 8 }
 });
