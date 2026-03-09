@@ -28,6 +28,12 @@
     "plugins": [
       "expo-router",
       [
+        "expo-av",
+        {
+          "playsInSilentModeIOS": true
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
@@ -38,7 +44,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
