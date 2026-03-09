@@ -1,29 +1,30 @@
-import React, { useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  useColorScheme,
-  ScrollView,
-  Modal,
-  TextInput,
-  Platform,
-  KeyboardAvoidingView,
-  TouchableWithoutFeedback,
-  Alert,
-} from "react-native";
+import { auth, backend, db, uploadImage } from "@/firebaseConfig";
+import { useAuth, UserProfile } from "@/hooks/use-auth";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
-  signOut,
-  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
 } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db, uploadFile, uploadImage } from "@/firebaseConfig";
-import { useAuth } from "@/hooks/useAuth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import React, { useMemo, useState } from "react";
+import {
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableWithoutFeedback,
+  useColorScheme,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Image, Linking } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 
 type AuthMode = "signin" | "signup";
 
@@ -119,6 +120,31 @@ export default function ProfileScreen() {
     ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
   } as const;
 
+  async function updateProfile(update: Partial<UserProfile>) {
+    var token = await user?.getIdToken()
+
+    // if the user wants to update their profile picture, and the profile picture in the update is different from their existing one
+    if (update?.profilePicture && profile?.profilePicture != update.profilePicture) {
+      var imageId = await uploadImage(update.profilePicture)
+      update.profilePicture = `https://firebasestorage.googleapis.com/v0/b/ear-training-8f082.firebasestorage.app/o/${imageId}?alt=media`
+    }
+
+
+    fetch(`${backend}/update-profile`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...update,
+        authToken: token
+      }),
+      headers: {
+        "Content-type": "application/json"
+      }
+    })
+      .then((response) => console.log(response))
+      .catch((error) => console.log(error))
+  }
+
+
   const pickAvatar = async () => {
     try {
       console.log("pickAvatar pressed");
@@ -154,9 +180,11 @@ export default function ProfileScreen() {
 
       const uri = result.assets?.[0]?.uri;
       if (!uri) return;
-
+      
       setAvatarUri(uri);
-      uploadImage(uri)
+      updateProfile({
+        profilePicture: uri
+      })
     } catch (e: any) {
       console.log("pickAvatar error:", e?.message ?? e);
       Alert.alert("Error", e?.message ?? "Failed to open photo library.");

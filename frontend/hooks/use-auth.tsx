@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState } from "react";
-import { onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "@/firebaseConfig";
-import { doc, onSnapshot, Unsubscribe } from "firebase/firestore"
+import { onAuthStateChanged, User } from "firebase/auth";
+import { doc, onSnapshot, Unsubscribe } from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
 
-type UserProfile = {
+export type UserProfile = {
     currentXp: number,
     email: string,
     firstName: string,
     lastName: string,
     level: number,
     streak: number,
-    uid: string
+    uid: string,
+    profilePicture: string
 }
 
 export function useAuth(): [User | undefined | null, UserProfile | undefined] {
