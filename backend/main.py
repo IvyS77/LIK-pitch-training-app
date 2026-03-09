@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import FastAPI
 from dotenv import load_dotenv
 import firebase_admin
@@ -27,6 +29,12 @@ class CreateProfileRequestBody(BaseModel):
     lastName: str
     authToken: str
 
+class UpdateProfileRequestBody(BaseModel):
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    profilePicture: Optional[str] = None
+    authToken: str
+
 app = FastAPI()
 origins = [
     "http://localhost:8081"
@@ -50,10 +58,10 @@ def get_user():
     user_id = "pU1z2BwT9l0hO1p6R34a"
 
     snap = db.collection("users").document(user_id).get()
-    if not snap.exists:
+    if not snap.exists: # type: ignore
         return {"error": "user not found"}
 
-    data = snap.to_dict() or {}
+    data = snap.to_dict() or {} # type: ignore
     data.setdefault("level", 1)
     data.setdefault("currentXp", 0)
     data.setdefault("streak", 0)
@@ -85,5 +93,21 @@ async def create_profile(profile: CreateProfileRequestBody):
     return "success"
 
 @app.post("/update-profile")
-async def update_profile():
+async def update_profile(update: UpdateProfileRequestBody):
+    decoded_token = auth.verify_id_token(update.authToken)
+    email = decoded_token["email"]
+    uid = decoded_token["uid"]
+
+    new_doc = {}
+
+    if update.firstName != None:
+        new_doc["firstName"] = update.firstName
+
+    if update.lastName != None:
+        new_doc["lastName"] = update.lastName
+
+    if update.profilePicture != None:
+        new_doc["profilePicture"] = update.profilePicture
+
+    db.collection("users").document(uid).update(new_doc)
     return

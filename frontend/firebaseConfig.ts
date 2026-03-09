@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage, ref, uploadBytes } from "firebase/storage";
+import { useAuth, UserProfile } from "./hooks/use-auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB1jOfSnwiSLdQLcs63vFzt7NJi58i0p3Q",
