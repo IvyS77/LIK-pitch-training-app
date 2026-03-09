@@ -50,7 +50,6 @@ export default function ProfileScreen() {
     [isDark]
   );
 
-  // ✅ This was missing in your pasted version
   const [user, profile] = useAuth();
 
   const [avatarUri, setAvatarUri] = useState<string | null>(null);

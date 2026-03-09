@@ -1,298 +1,227 @@
-import { useMemo, useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  ActivityIndicator,
-  useColorScheme,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
+import { Ionicons } from '@expo/vector-icons'; 
+import * as Tone from "tone";
+import * as Haptics from 'expo-haptics';
 
-type GameState = 'answering' | 'submitting' | 'result';
+// --- 🎹 GLOBAL AUDIO SINGLETON (Prevents AudioParam Errors) ---
+let globalSynth: Tone.Synth | null = null;
 
 const NOTE_OPTIONS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
-
 type Difficulty = 'Easy' | 'Medium' | 'Hard';
 
 const DIFFICULTY_SECONDS: Record<Difficulty, number> = {
-  Easy: 10,
-  Medium: 6,
-  Hard: 3,
+  Easy: 10, Medium: 6, Hard: 3,
 };
 
-function randomChoice<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
 export default function PitchScreen() {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-
-  // Duolingo-style colors
-  const colors = {
-    pageBg: isDark ? '#121212' : '#F5F6FA',
-    cardBg: isDark ? '#1E1E1E' : '#FFFFFF',
-    border: isDark ? '#2A2A2A' : '#E2E5EE',
-    text: isDark ? '#F2F2F2' : '#111111',
-    subText: isDark ? '#B3B3B3' : '#555555',
-
-    easy: isDark ? '#58CC02' : '#20A779',
-    medium: isDark ? '#FFC800' : '#D97706',
-    hard: isDark ? '#FF4B4B' : '#DC2626',
-
-    optionBg: isDark ? '#1E1E1E' : '#FFFFFF',
-    optionText: isDark ? '#F2F2F2' : '#111111',
-    optionSelectedText: '#FFFFFF',
-
-    primaryBtnText: '#FFFFFF',
-  };
-
-  const difficultyColor = (d: Difficulty) => {
-    if (d === 'Easy') return colors.easy;
-    if (d === 'Medium') return colors.medium;
-    return colors.hard;
-  };
-
-  const [targetNote, setTargetNote] = useState<string>(() =>
-    randomChoice(NOTE_OPTIONS)
-  );
+  const [targetNote, setTargetNote] = useState<string>("");
   const [selectedNote, setSelectedNote] = useState<string | null>(null);
-  const [state, setState] = useState<GameState>('answering');
-  const [result, setResult] = useState<{
-    correct: boolean;
-    score: number;
-    feedback: string;
-  } | null>(null);
-
+  const [state, setState] = useState<'idle' | 'answering' | 'result'>('idle');
+  const [secondsLeft, setSecondsLeft] = useState(DIFFICULTY_SECONDS.Easy);
   const [difficulty, setDifficulty] = useState<Difficulty>('Easy');
-  const [secondsLeft, setSecondsLeft] = useState<number>(
-    DIFFICULTY_SECONDS.Easy
-  );
 
-  const canSubmit = useMemo(
-    () => state === 'answering' && selectedNote !== null,
-    [state, selectedNote]
-  );
+  const initAndPlay = async (note: string) => {
+    if (!note) return;
+    try {
+      await Tone.start();
+      if (!globalSynth) {
+        globalSynth = new Tone.Synth({
+          oscillator: { type: "triangle" },
+          envelope: { attack: 0.1, release: 1 }
+        }).toDestination();
+      }
+      if (Tone.getContext().state !== 'running') {
+        await Tone.getContext().resume();
+      }
+      const now = Tone.now();
+      globalSynth.triggerAttackRelease(`${note}4`, "4n", now + 0.1);
+    } catch (e) {
+      console.warn("Audio initialized via singleton.");
+    }
+  };
 
   const startNewRound = () => {
-    setTargetNote(randomChoice(NOTE_OPTIONS));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    
+    const nextNote = NOTE_OPTIONS[Math.floor(Math.random() * NOTE_OPTIONS.length)];
+    setTargetNote(nextNote);
     setSelectedNote(null);
-    setResult(null);
     setState('answering');
     setSecondsLeft(DIFFICULTY_SECONDS[difficulty]);
+    
+    initAndPlay(nextNote);
   };
 
-  useEffect(() => {
-    if (state === 'answering') {
-      setSecondsLeft(DIFFICULTY_SECONDS[difficulty]);
-    }
-  }, [difficulty, state]);
-
-  useEffect(() => {
-    if (state !== 'answering') return;
-
-    if (secondsLeft <= 0) {
-      setResult({
-        correct: false,
-        score: 0,
-        feedback: "Time's up!",
-      });
-      setState('result');
-      return;
+  const handleSubmit = () => {
+    const isCorrect = selectedNote === targetNote;
+    
+    // --- 🎯 FEEDBACK LOGIC ---
+    if (isCorrect) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
 
-    const id = setInterval(() => {
-      setSecondsLeft((s) => s - 1);
-    }, 1000);
-
-    return () => clearInterval(id);
-  }, [state, secondsLeft]);
-
-  const onSubmit = async () => {
-    if (!canSubmit) return;
-
-    setState('submitting');
-    await new Promise((r) => setTimeout(r, 500));
-
-    const correct = selectedNote === targetNote;
-    setResult({
-      correct,
-      score: correct ? 100 : 40,
-      feedback: correct ? 'Nice! You got it.' : `Close — it was ${targetNote}.`,
-    });
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
     setState('result');
   };
 
-  const cardStyle = {
-    padding: 14,
-    borderWidth: 1,
-    borderRadius: 14,
-    backgroundColor: colors.cardBg,
-    borderColor: colors.border,
-  } as const;
+  useEffect(() => {
+    if (state === 'answering' && secondsLeft > 0) {
+      const id = setInterval(() => setSecondsLeft(s => s - 1), 1000);
+      return () => clearInterval(id);
+    } else if (secondsLeft === 0 && state === 'answering') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setState('result');
+    }
+  }, [state, secondsLeft]);
 
   return (
-    <ThemedView style={{ flex: 1, padding: 16, backgroundColor: colors.pageBg }}>
-      <ThemedText type="title" style={{ color: colors.text, marginBottom: 12 }}>
-        Pitch Exercise
-      </ThemedText>
-
-      <View style={cardStyle}>
-        <ThemedText type="subtitle" style={{ color: colors.text }}>
-          Listen and identify the pitch
-        </ThemedText>
-
-        {/* Difficulty selector */}
-        <View style={{ flexDirection: 'row', marginTop: 12 }}>
-          {(['Easy', 'Medium', 'Hard'] as Difficulty[]).map((d) => {
-            const active = difficulty === d;
-            const disabled = state !== 'answering';
-
-            return (
-              <Pressable
-                key={d}
-                onPress={() => setDifficulty(d)}
-                disabled={disabled}
-                style={{
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
-                  borderWidth: 2,
-                  borderColor: active ? difficultyColor(d) : colors.border,
-                  backgroundColor: active ? difficultyColor(d) : colors.optionBg,
-                  marginRight: 8,
-                  opacity: disabled ? 0.6 : 1,
-                }}
-              >
-                <Text
-                  style={{
-                    fontWeight: '800',
-                    color: active ? '#FFFFFF' : colors.optionText,
-                  }}
-                >
-                  {d}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Text style={{ fontSize: 16, color: colors.text, marginTop: 12 }}>
-          Target note:{' '}
-          <Text style={{ fontWeight: '800' }}>{targetNote}</Text>
-        </Text>
-
-        <Text style={{ fontSize: 16, marginTop: 8 }}>
-          Time left:{' '}
-          <Text style={{ fontWeight: '900', color: difficultyColor(difficulty) }}>
-            {secondsLeft}s
-          </Text>
-        </Text>
-
-        <Text style={{ color: colors.subText, marginTop: 10 }}>
-          Select the note you think it is:
-        </Text>
-
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 }}>
-          {NOTE_OPTIONS.map((note) => {
-            const isSelected = selectedNote === note;
-            const disabled = state !== 'answering';
-
-            return (
-              <Pressable
-                key={note}
-                disabled={disabled}
-                onPress={() => setSelectedNote(note)}
-                style={{
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  borderRadius: 12,
-                  borderWidth: 2,
-                  borderColor: isSelected
-                    ? difficultyColor(difficulty)
-                    : colors.border,
-                  backgroundColor: isSelected
-                    ? difficultyColor(difficulty)
-                    : colors.optionBg,
-                  marginRight: 8,
-                  marginBottom: 8,
-                  opacity: disabled ? 0.5 : 1,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: '800',
-                    color: isSelected ? '#FFFFFF' : colors.optionText,
-                  }}
-                >
-                  {note}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+    <ThemedView style={styles.container}>
+      <View style={styles.header}>
+        <ThemedText type="title" style={styles.titleText}>Pitch Training</ThemedText>
       </View>
 
-      {/* Submit */}
-      <Pressable
-        onPress={onSubmit}
-        disabled={!canSubmit || state !== 'answering'}
-        style={({ pressed }) => ({
-          marginTop: 14,
-          paddingVertical: 14,
-          borderRadius: 14,
-          backgroundColor: canSubmit ? difficultyColor(difficulty) : 'transparent',
-          borderWidth: 1,
-          borderColor: canSubmit ? 'transparent' : colors.border,
-          alignItems: 'center',
-          opacity: pressed ? 0.85 : canSubmit ? 1 : 0.35,
-        })}
+      {/* 🎧 SLEEK AUDIO HUB */}
+      <Pressable 
+        onPress={() => state === 'answering' && initAndPlay(targetNote)}
+        disabled={state !== 'answering'}
+        style={({ pressed }) => [
+          styles.playHub,
+          pressed && { opacity: 0.6 }
+        ]}
       >
-        {state === 'submitting' ? (
-          <ActivityIndicator color={colors.primaryBtnText} />
-        ) : (
-          <Text style={{ fontSize: 16, fontWeight: '800', color: canSubmit ? '#FFFFFF' : colors.text }}>
-            Submit
-          </Text>
+        <View style={styles.hubLeft}>
+          <View style={[styles.statusIcon, { backgroundColor: state === 'answering' ? "#1DB954" : "#334155" }]}>
+            <Ionicons name={state === 'answering' ? "headset" : "play"} size={14} color="white" />
+          </View>
+          <View>
+            <Text style={styles.hubTitle}>Identify the Pitch</Text>
+            <Text style={styles.hubStatus}>{state === 'answering' ? "Listening..." : "Ready"}</Text>
+          </View>
+        </View>
+        {state === 'answering' && (
+          <Ionicons name="volume-high" size={16} color="#1DB954" />
         )}
       </Pressable>
 
-      {/* Result */}
-      <View style={[cardStyle, { marginTop: 14 }]}>
-        <ThemedText type="subtitle" style={{ color: colors.text }}>
-          Result
-        </ThemedText>
-
-        {!result ? (
-          <Text style={{ color: colors.subText }}>
-            Submit an answer to see feedback.
+      <View style={styles.gameCard}>
+        <View style={styles.cardInfo}>
+          <View style={styles.difficultyGroup}>
+            {(['Easy', 'Medium', 'Hard'] as Difficulty[]).map((d) => (
+              <Pressable
+                key={d}
+                onPress={() => {
+                  setDifficulty(d);
+                  setSecondsLeft(DIFFICULTY_SECONDS[d]);
+                  Haptics.selectionAsync();
+                }}
+                style={[styles.diffTab, difficulty === d && styles.diffTabActive]}
+              >
+                <Text style={[styles.diffTabText, difficulty === d && { color: '#fff' }]}>{d}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={[styles.timerDisplay, secondsLeft <= 3 && { color: '#EF4444' }]}>
+            {secondsLeft}s
           </Text>
-        ) : (
-          <>
-            <Text style={{ fontWeight: '900', color: colors.text, marginTop: 6 }}>
-              {result.correct ? '✅ Correct' : '❌ Incorrect'}
-            </Text>
-            <Text style={{ color: colors.text }}>Score: {result.score}</Text>
-            <Text style={{ color: colors.text }}>{result.feedback}</Text>
+        </View>
 
+        <View style={styles.grid}>
+          {NOTE_OPTIONS.map((note) => (
             <Pressable
-              onPress={startNewRound}
-              style={({ pressed }) => ({
-                marginTop: 10,
-                paddingVertical: 12,
-                borderRadius: 14,
-                backgroundColor: difficultyColor(difficulty),
-                alignItems: 'center',
-                opacity: pressed ? 0.85 : 1,
-              })}
+              key={note}
+              disabled={state !== 'answering'}
+              onPress={() => {
+                setSelectedNote(note);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              }}
+              style={[
+                styles.noteBtn,
+                selectedNote === note && styles.noteBtnActive
+              ]}
             >
-              <Text style={{ fontWeight: '800', color: '#FFFFFF' }}>Next</Text>
+              <Text style={[styles.noteText, { color: selectedNote === note ? '#fff' : '#94A3B8' }]}>
+                {note}
+              </Text>
             </Pressable>
-          </>
-        )}
+          ))}
+        </View>
       </View>
+
+      <View style={styles.footer}>
+        <Pressable 
+          onPress={state === 'answering' ? handleSubmit : startNewRound}
+          disabled={state === 'answering' && !selectedNote}
+          style={[styles.actionBtn, (state === 'answering' && !selectedNote) && { opacity: 0.2 }]}
+        >
+          <Text style={styles.actionBtnText}>
+            {state === 'answering' ? "SUBMIT ANSWER" : "START NEXT ROUND"}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* FLOATING RESULT BADGE */}
+      {state === 'result' && (
+        <View style={[
+          styles.toast, 
+          { borderColor: selectedNote === targetNote ? "#1DB954" : "#EF4444" }
+        ]}>
+          <Ionicons 
+            name={selectedNote === targetNote ? "checkmark-circle" : "close-circle"} 
+            size={18} 
+            color={selectedNote === targetNote ? "#1DB954" : "#EF4444"} 
+          />
+          <Text style={styles.toastText}>
+            {selectedNote === targetNote ? " PERFECT! YOU GOT IT." : ` WRONG, IT WAS ${targetNote}`}
+          </Text>
+        </View>
+      )}
     </ThemedView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 60, backgroundColor: "#020617" },
+  header: { marginBottom: 15 },
+  titleText: { color: "#F8FAFC", fontSize: 24, fontWeight: '900', letterSpacing: -1 },
+  
+  playHub: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
+    padding: 14, borderRadius: 16, backgroundColor: "#0F172A", 
+    borderWidth: 1, borderColor: "#1E293B", marginBottom: 20
+  },
+  hubLeft: { flexDirection: 'row', alignItems: 'center' },
+  statusIcon: { width: 30, height: 30, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  hubTitle: { fontSize: 14, fontWeight: '700', color: "#F1F5F9" },
+  hubStatus: { fontSize: 10, color: '#64748B', textTransform: 'uppercase' },
+
+  gameCard: { padding: 20, borderRadius: 24, backgroundColor: "#0F172A", borderStyle: 'dashed', borderWidth: 1, borderColor: "#334155" },
+  cardInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 25 },
+  difficultyGroup: { flexDirection: 'row', backgroundColor: '#020617', padding: 4, borderRadius: 10 },
+  diffTab: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 7 },
+  diffTabActive: { backgroundColor: "#1DB954" },
+  diffTabText: { fontSize: 11, fontWeight: '800', color: '#475569' },
+  timerDisplay: { fontSize: 18, fontWeight: '900', color: "#1DB954" },
+  
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
+  noteBtn: { width: 54, height: 54, borderRadius: 16, borderWidth: 1, borderColor: "#1E293B", justifyContent: 'center', alignItems: 'center', margin: 8 },
+  noteBtnActive: { backgroundColor: "#1DB954", borderColor: "#1DB954" },
+  noteText: { fontSize: 18, fontWeight: '800' },
+  
+  footer: { marginTop: 'auto', marginBottom: 40 },
+  actionBtn: { backgroundColor: '#1DB954', paddingVertical: 18, borderRadius: 18, alignItems: 'center' },
+  actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
+  
+  toast: { 
+    position: 'absolute', bottom: 120, alignSelf: 'center', 
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: "#F8FAFC", paddingVertical: 12, paddingHorizontal: 20, 
+    borderRadius: 50, borderWidth: 2, shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 10
+  },
+  toastText: { color: '#020617', fontWeight: '900', fontSize: 13, marginLeft: 8 }
+});
