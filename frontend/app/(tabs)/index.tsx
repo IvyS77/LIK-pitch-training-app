@@ -9,12 +9,11 @@ import { useRouter } from "expo-router";
 
 export default function HomePage() {
   const [progress, setProgress] = useState<UserProgress | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     loadProgressAsync().then(setProgress);
   }, []);
-
-  const router = useRouter();
 
   if (!progress) return null;
 
@@ -32,7 +31,9 @@ export default function HomePage() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
 
-
+      <Animated.Text entering={FadeInUp.delay(0)} style={styles.title}>
+        EarQuest 🎵
+      </Animated.Text>
 
       <View style={styles.statsRow}>
         {stats.map((s, i) => (
